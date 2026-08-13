@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Game Musang X TKR 2</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#eef7ef;color:#203126}
+header{background:#315c3a;color:#fff;text-align:center;padding:22px 12px}
+.wrap{max-width:850px;margin:auto;padding:14px}.card{background:#fff;border-radius:16px;padding:18px;margin:14px 0;box-shadow:0 3px 14px #0001}
+input,button{width:100%;padding:14px;margin:6px 0;border-radius:10px;font-size:16px}
+input{border:2px solid #d5e5d7}button{border:0;font-weight:700;touch-action:manipulation}
+.green{background:#315c3a;color:#fff}.gold{background:#d99d25;color:#fff}.gray{background:#666;color:#fff}.red{background:#d9534f;color:#fff}
+#game,#result,#adminBox{display:none}.stats{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;background:#315c3a;color:#fff;padding:12px;border-radius:10px}
+.q{font-size:20px;font-weight:700;line-height:1.45;margin:16px 0}.answer{text-align:left;background:#edf7ef;color:#203126}.correct{background:#91d99c!important}.wrong{background:#ef9999!important}
+.rank{display:flex;gap:10px;padding:11px;background:#edf7ef;border-radius:9px;margin:6px 0}.who{flex:1;font-weight:700}.small{font-size:13px;color:#657269}
+#live{font-weight:700}.error{color:#c62828;font-weight:700}.score{text-align:center;font-size:46px;font-weight:700;color:#315c3a}
+</style>
+</head>
+<body>
+<header><h1>🦝 Game Edukatif Musang</h1><b>Kelompok 4 — X TKR 2</b></header>
+<div class="wrap">
+
+<div class="card"><h2>👥 Anggota Kelompok</h2>
+<p>Muhamad Al Fatir Irawansyah<br>Ashraf Abiyyi<br>Yobi musyarif<br>Fahmi parvez F.<br>Muhammad Lutfi Firdaus<br>Raja Zakiyy A.F</p></div>
+
+<div class="card" id="menu"><h2>🎮 Mulai Game</h2>
+<input id="playerName" maxlength="25" placeholder="Masukkan nama">
+<button id="start" type="button" class="green">🚀 MULAI GAME</button>
+<p class="small">Firebase tidak menghalangi game untuk mulai.</p></div>
+
+<div class="card" id="game">
+<div class="stats"><span>👤 <b id="pname"></b></span><span>🏆 <b id="score">0</b></span><span>❤️ <b id="lives">3</b></span><span>📊 <b id="num">1</b>/20</span></div>
+<div id="question" class="q"></div><div id="answers"></div><p id="feedback"></p>
+<button id="next" type="button" class="gold" style="display:none">Soal Berikutnya ➡️</button></div>
+
+<div class="card" id="result"><h2>🎉 Selesai!</h2><p id="resultName"></p><div id="final" class="score">0</div><p id="save"></p><button id="again" type="button" class="green">🔄 Main Lagi</button></div>
+
+<div class="card"><h2>🏆 Leaderboard Semua Pemain</h2>
+<p id="live" class="small">🟡 Memuat leaderboard...</p>
+<p id="debugBox" class="error" style="display:none;word-break:break-word"></p>
+<div id="leaderboard"><p>Belum ada skor.</p></div></div>
+
+<div class="card"><button id="adminToggle" type="button" class="gray">🔐 Panel Admin</button>
+<div id="adminBox"><input id="email" type="email" placeholder="Email admin"><input id="password" type="password" placeholder="Password admin">
+<button id="login" type="button" class="green">LOGIN ADMIN</button><p id="adminStatus" class="small"></p>
+<button id="delete" type="button" class="red" style="display:none">🗑️ HAPUS SEMUA LEADERBOARD</button>
+<button id="logout" type="button" class="gray" style="display:none">LOGOUT</button></div></div>
+
+</div>
+
+<script>
+// Tangkap SEMUA error JS (termasuk gagal load Firebase) dan tampilkan di layar,
+// supaya kelihatan tanpa perlu buka console developer (berguna saat di HP).
+window.addEventListener('error', function(e){
+  var box=document.getElementById('debugBox');
+  if(box){box.style.display='block';box.textContent='⚠️ ERROR: '+(e.message||e.error||'unknown')+' ('+(e.filename||'')+':'+(e.lineno||'')+')';}
+});
+window.addEventListener('unhandledrejection', function(e){
+  var box=document.getElementById('debugBox');
+  if(box){box.style.display='block';box.textContent='⚠️ ERROR (promise): '+(e.reason && e.reason.message ? e.reason.message : e.reason);}
+});
+</script>
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+import {getDatabase,ref,push,set,onValue,remove} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
+import {getAuth,signInAnonymously,signInWithEmailAndPassword,signOut,onAuthStateChanged} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+
+const $=id=>document.getElementById(id);
+
+const firebaseConfig = {
+  apiKey: "AIzaSyD8SGrUoZytPwyg4ceyuAxakLUH9prdT4M",
+  authDomain: "xtkr2-8c0b6.firebaseapp.com",
+  databaseURL: "https://xtkr2-8c0b6-default-rtdb.firebaseio.com",
+  projectId: "xtkr2-8c0b6",
+  storageBucket: "xtkr2-8c0b6.firebasestorage.app",
+  messagingSenderId: "863846940575",
+  appId: "1:863846940575:web:0697405e5182baf31cc7aa",
+  measurementId: "G-3JYELL0K07"
+};
+const OWNER_UID="Ews6kCxgzDa2IPv1MwGI1mXyNlC2";
+const app=initializeApp(firebaseConfig);
+const db=getDatabase(app);
+const auth=getAuth(app);
+const lb=ref(db,"leaderboard");
+
+let firebaseUser=null;
+let firebaseReady=null;
+let leaderboardUnsub=null;
+
+function startLeaderboardListener(){
+  if(leaderboardUnsub){leaderboardUnsub();leaderboardUnsub=null} // cegah listener dobel
+  leaderboardUnsub=onValue(lb,(snap)=>{
+    $("live").className="small";
+    $("live").textContent="🟢 LIVE — leaderboard realtime aktif";
+    const box=$("leaderboard");
+    const rows=[];
+    snap.forEach(child=>{
+      const v=child.val()||{};
+      rows.push({
+        name:String(v.name||v.nama||"Tanpa nama"),
+        score:Number(v.score??v.skor??0),
+        time:Number(v.time??v.waktu??0)
+      });
+    });
+    rows.sort((a,b)=>b.score-a.score || a.time-b.time);
+    box.innerHTML="";
+    if(!rows.length){
+      box.innerHTML="<p>Belum ada skor. Selesaikan game untuk masuk leaderboard.</p>";
+      return;
+    }
+    rows.forEach((r,n)=>{
+      const row=document.createElement("div");
+      row.className="rank";
+      const pos=document.createElement("b");
+      pos.textContent=(n+1)+".";
+      const who=document.createElement("span");
+      who.className="who";
+      who.textContent=r.name;
+      const pts=document.createElement("b");
+      pts.textContent=r.score+" poin";
+      row.append(pos,who,pts);
+      box.appendChild(row);
+    });
+  },(e)=>{
+    console.error("Realtime Database:",e);
+    $("live").className="error";
+    $("live").textContent="🔴 Database: "+e.message+" — mencoba menyambung ulang...";
+    const box=$("debugBox");
+    if(box){box.style.display="block";box.textContent="⚠️ Firebase Database error: "+e.code+" — "+e.message;}
+    // Kalau gagal baca (misal butuh login), coba login anonim lalu sambung ulang
+    connectFirebase().catch(()=>{});
+  });
+}
+
+async function connectFirebase(){
+  try{
+    const cred=await signInAnonymously(auth);
+    firebaseUser=cred.user;
+    startLeaderboardListener();
+    return cred.user;
+  }catch(e){
+    console.error("Firebase login:",e);
+    throw e;
+  }
+}
+
+// Leaderboard langsung tampil & realtime begitu halaman dibuka di perangkat MANAPUN,
+// tidak perlu menunggu proses login anonim selesai lebih dulu.
+startLeaderboardListener();
+// Login anonim tetap jalan di belakang layar, dipakai saat menyimpan skor pemain.
+firebaseReady=connectFirebase();
+
+const qs=[
+["MUDAH","Musang termasuk kelompok hewan...",["Mamalia","Ikan","Amfibi","Serangga"],0],
+["MUDAH","Ciri fisik musang yang umum adalah...",["Tubuh ramping dan ekor panjang","Sirip","Sayap","Cangkang"],0],
+["MUDAH","Salah satu habitat musang adalah...",["Hutan","Laut dalam","Terumbu karang","Dasar samudra"],0],
+["MUDAH","Banyak jenis musang aktif terutama pada...",["Malam hari","Siang saja","Tengah hari","Tidak pernah"],0],
+["MUDAH","Musang berkembang biak dengan cara...",["Melahirkan","Bertelur","Membelah diri","Bertunas"],0],
+["SEDANG","Mengapa beberapa musang disebut omnivora?",["Memakan tumbuhan dan hewan kecil","Hanya buah","Hanya daging","Tidak makan"],0],
+["SEDANG","Ekor panjang membantu musang...",["Menjaga keseimbangan","Bernapas","Menangkap ikan","Menggantikan kaki"],0],
+["SEDANG","Penciuman penting bagi musang untuk...",["Mencari makanan","Terbang","Bernapas di air","Membuat tanah"],0],
+["SEDANG","Musang yang memakan buah dapat membantu...",["Penyebaran biji","Menghentikan tanaman","Menghilangkan tumbuhan","Membuat buah"],0],
+["SEDANG","Musang dapat hidup dekat manusia karena...",["Beberapa jenis mampu beradaptasi","Tidak butuh habitat","Hanya hidup di rumah","Tidak butuh makanan"],0],
+["SULIT","Penggundulan hutan dapat menyebabkan musang...",["Kehilangan habitat dan makanan","Mendapat lebih banyak makanan","Berubah menjadi hewan lain","Tidak terdampak"],0],
+["SULIT","Musang memakan buah lalu menyebarkan bijinya. Perannya adalah...",["Penyebar biji","Produsen","Penghasil oksigen","Penghancur habitat"],0],
+["SULIT","Jika populasi musang turun drastis, dampaknya dapat berupa...",["Gangguan pada rantai makanan dan penyebaran biji","Semua tumbuhan mati","Semua hewan jadi herbivora","Tidak ada perubahan"],0],
+["SULIT","Hilangnya habitat berbahaya karena...",["Tempat berlindung dan makanan berkurang","Musang tidak butuh makanan","Musang hanya butuh manusia","Musang tanpa habitat"],0],
+["SULIT","Perubahan hutan menjadi perkebunan dapat...",["Mengurangi sumber daya musang","Selalu menaikkan populasi","Membuat musang jadi hewan air","Tidak mengubah apa pun"],0],
+["SULIT","Jika buah berkurang, musang kemungkinan...",["Mencari sumber makanan lain","Berhenti makan selamanya","Menjadi tumbuhan","Tidak bergerak"],0],
+["SULIT","Menjaga musang membantu ekosistem karena...",["Musang berinteraksi dengan organisme lain","Musang menghasilkan semua makanan","Musang tidak berinteraksi","Ekosistem hanya bergantung pada musang"],0],
+["SULIT","Tindakan konservasi tepat adalah...",["Menjaga habitat dan tidak memburu","Menjual musang","Memburu semua musang","Merusak habitat"],0],
+["SULIT","Musang memakan buah dan hewan kecil. Artinya musang...",["Memiliki beberapa hubungan dalam rantai makanan","Selalu produsen","Bukan konsumen","Hanya pengurai"],0],
+["SULIT","Strategi konservasi terbaik adalah...",["Melindungi habitat dan mengurangi perburuan","Hanya memberi makanan","Memindahkan semua ke rumah","Membiarkan habitat rusak"],0]
+];
+
+let i=0,sc=0,life=3,name="",answered=false;
+function shuffle(a){for(let x=a.length-1;x>0;x--){let y=Math.floor(Math.random()*(x+1));[a[x],a[y]]=[a[y],a[x]]}return a}
+function show(){
+ answered=false; const q=qs[i]; $("question").innerHTML="<small>"+q[0]+"</small><br>"+q[1];$("answers").innerHTML="";$("feedback").textContent="";$("next").style.display="none";
+ shuffle(q[2].map((t,n)=>({t,ok:n===q[3]}))).forEach((o,n)=>{const b=document.createElement("button");b.type="button";b.className="answer";b.textContent=String.fromCharCode(65+n)+". "+o.t;b.onclick=()=>answer(b,o.ok);$("answers").appendChild(b)});
+ $("score").textContent=sc;$("lives").textContent=life;$("num").textContent=i+1;
+}
+function startGame(){name=$("playerName").value.trim();if(!name){alert("Masukkan nama dulu!");$("playerName").focus();return}i=0;sc=0;life=3;$("pname").textContent=name;$("menu").style.display="none";$("result").style.display="none";$("game").style.display="block";show()}
+function answer(btn,ok){if(answered)return;answered=true;document.querySelectorAll(".answer").forEach(b=>b.disabled=true);if(ok){btn.classList.add("correct");sc+=100;$("feedback").textContent="✅ Benar! +100"}else{btn.classList.add("wrong");life--;$("feedback").textContent="❌ Salah!"}$("score").textContent=sc;$("lives").textContent=life;$("next").style.display="block"}
+async function finish(){
+  $("game").style.display="none";
+  $("result").style.display="block";
+  $("resultName").textContent="Pemain: "+name;
+  $("final").textContent=sc;
+  $("save").textContent="⏳ Menyimpan skor...";
+  try{
+    const user=firebaseUser || await firebaseReady;
+    const r=push(lb);
+    await set(r,{
+      name:name,
+      score:Number(sc),
+      time:Date.now(),
+      uid:user.uid
+    });
+    $("save").textContent="✅ Skor tersimpan dan masuk leaderboard realtime!";
+  }catch(e){
+    console.error("Simpan skor:",e);
+    $("save").textContent="❌ Skor gagal disimpan: "+e.message;
+  }
+}
+$("start").onclick=startGame;
+$("next").onclick=()=>{if(life<=0||i===19)finish();else{i++;show()}};
+$("again").onclick=()=>{$("result").style.display="none";$("menu").style.display="block";$("playerName").value=""};
+$("playerName").onkeydown=e=>{if(e.key==="Enter")startGame()};
+
+$("adminToggle").onclick=()=>{$("adminBox").style.display=$("adminBox").style.display==="block"?"none":"block"};
+let admin=null;
+onAuthStateChanged(auth,u=>{admin=u;const ok=u&&u.uid===OWNER_UID;$("delete").style.display=ok?"block":"none";$("logout").style.display=u?"block":"none";$("adminStatus").textContent=ok?"👑 Admin terverifikasi.":u?"⚠️ Bukan akun owner.":""});
+$("login").onclick=async()=>{try{const r=await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value);if(r.user.uid!==OWNER_UID){await signOut(auth);$("adminStatus").textContent="❌ Akun ini bukan owner."}}catch(e){$("adminStatus").textContent="❌ "+e.message}};
+$("logout").onclick=()=>signOut(auth);
+$("delete").onclick=async()=>{if(!admin||admin.uid!==OWNER_UID){alert("Akses ditolak.");return}if(confirm("Hapus semua leaderboard?")){try{await remove(lb);alert("✅ Leaderboard dihapus.")}catch(e){alert("❌ "+e.message)}}};
+</script>
+</body>
+</html>
